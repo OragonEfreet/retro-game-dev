@@ -173,19 +173,23 @@ void key_callback(bj_window* p_window, const bj_key_event* e) {
     for(size_t r = 0 ; r < 2 ; ++r) {
         if(e->key == keymap[r].up) {
             game.paddle[r].up = e->action == BJ_PRESS;
+            game.running = BJ_TRUE;
         }
         if(e->key == keymap[r].down) {
             game.paddle[r].down = e->action == BJ_PRESS;
+            game.running = BJ_TRUE;
         }
     }
 
-    if(e->key == BJ_KEY_ESCAPE && e->action == BJ_RELEASE) {
-        game.paddle[0].score = 0;
-        game.paddle[1].score = 0;
-        game.game_over = BJ_FALSE;
-        reset_game();
-    } else {
-        game.running = BJ_TRUE;
+    if(e->key == BJ_KEY_ESCAPE && e->action == BJ_PRESS) {
+        if(game.running) {
+            game.paddle[0].score = 0;
+            game.paddle[1].score = 0;
+            game.game_over = BJ_FALSE;
+            reset_game();
+        } else {
+            bj_window_set_should_close(window);
+        }
     }
 }
 
