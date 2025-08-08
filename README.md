@@ -118,7 +118,7 @@ To build native Windows executables with Win32 and MME enabled (always on for Wi
 ```powershell
 mkdir .build_win
 cd .build_win
-cmake .. -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=Release -DBJ_FEATURE_WIN32=ON -DBJ_FEATURE_MME=ON
+cmake .. -G "Visual Studio 17 2022" -DCMAKE_BUILD_TYPE=Release -DBJ_FEATURE_WIN32=ON -DBJ_FEATURE_MME=ON
 cmake --build . --config Release
 ```
 
