@@ -54,3 +54,7 @@ dkms.conf
 # debug information files
 *.dwo
 *.swp
+
+# Build folders
+*.build/
+*.build_*/
