@@ -21,7 +21,7 @@ option(BJ_FEATURE_WIN32       "banjo: Add Win32 support"                        
 option(BJ_FEATURE_X11         "banjo: Add X11 support"                                                OFF)
 option(BJ_FEATURE_MME         "banjo: Add Windows MME audio"                                          OFF)
 option(BJ_FEATURE_ALSA        "banjo: Add ALSA audio"                                                 OFF)
-option(BJ_FEATURE_EMSCRIPTEN  "banjo: Add Emscripten support"                                         ON)
+option(BJ_FEATURE_EMSCRIPTEN  "banjo: Add Emscripten support"                                         OFF)
 option(BJ_CONFIG_ALL          "banjo: Enable all CONFIG options"                                      OFF)
 option(BJ_CONFIG_CHECKS_ABORT "banjo: Failed check aborts execution"                                  OFF)
 option(BJ_CONFIG_CHECKS_LOG   "banjo: Log failed checks"                                              OFF)
