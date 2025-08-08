@@ -150,7 +150,7 @@ void key_callback(bj_window* p_window, const bj_key_event* e) {
         bj_key down;
     } keymap[2] = {
         {.up = BJ_KEY_D, .down = BJ_KEY_F},
-        {.up = BJ_KEY_K, .down = BJ_KEY_J},
+        {.up = BJ_KEY_UP, .down = BJ_KEY_DOWN},
     };
 
     for(size_t r = 0 ; r < 2 ; ++r) {

@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>My WebAssembly Arcade</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root {
+      --bg: #111;
+      --fg: #eee;
+      --panel: #1b1b1b;
+      --accent: #2a2a2a;
+      --muted: #aaa;
+      --danger: #ff6b6b;
+      --ok: #8bd450;
+    }
+    html, body { height: 100%; margin: 0; background: var(--bg); color: var(--fg); font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+    header { padding: 12px; background: var(--panel); position: sticky; top: 0; display: flex; gap: 8px; align-items: center; z-index: 20; }
+    select, button, label { font-size: 16px; }
+    button { background: var(--accent); color: var(--fg); border: 1px solid #333; padding: 6px 10px; border-radius: 6px; cursor: pointer; }
+    button:hover { filter: brightness(1.1); }
+    main { display: grid; place-items: center; height: calc(100% - 56px); }
+    canvas {
+      width: 800px;
+      height: 600px;
+      background: #000;
+      border: 4px solid #444;
+      box-sizing: content-box;
+      margin: 10px;
+    }
+
+    /* Console overlay */
+    #consolePanel {
+      position: fixed;
+      left: 0; right: 0; bottom: 0;
+      height: 40vh; max-height: 80vh; min-height: 120px;
+      background: #0d0d0d; color: var(--fg);
+      border-top: 1px solid #333;
+      transform: translateY(100%);
+      transition: transform .18s ease-out;
+      display: grid;
+      grid-template-rows: 6px auto 40px;
+      z-index: 30;
+      box-shadow: 0 -8px 24px rgba(0,0,0,.5);
+    }
+    #consolePanel.open { transform: translateY(0); }
+    #consoleResizer { cursor: ns-resize; background: #222; }
+    #consoleToolbar { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: var(--panel); border-top: 1px solid #222; }
+    #consoleToolbar .spacer { flex: 1; }
+    #consoleToolbar .status-dot { width: 10px; height: 10px; border-radius: 50%; background: #555; display: inline-block; vertical-align: middle; margin-right: 6px; }
+    #consoleToolbar .status-dot.ok { background: var(--ok); }
+    #consoleToolbar .status-dot.err { background: var(--danger); }
+    #consoleLog {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 13px; line-height: 1.4;
+      padding: 10px 12px;
+      overflow: auto; white-space: pre-wrap; word-break: break-word;
+      background: #0b0b0b;
+    }
+    .log-line { color: #cfd3da; }
+    .log-stdout { color: #b5d1ff; }
+    .log-stderr { color: #ffb4b4; }
+    .log-note   { color: #9fd39f; }
+    .muted { color: var(--muted); }
+    #status { font-size: 14px; opacity: .8; margin-left: 12px; }
+  </style>
+</head>
+<body>
+  <header>
+    <label for="game">Game:</label>
+    <select id="game">
+@GAME_OPTIONS_HTML@
+    </select>
+    <button id="loadBtn">Load</button>
+    <span id="status">Select a game and click Load.</span>
+    <div class="spacer"></div>
+    <button id="toggleConsoleBtn" title="Toggle console (backtick)">Console</button>
+  </header>
+
+  <main>
+    <canvas id="canvas" tabindex="0"></canvas>
+  </main>
+
+  <!-- Console overlay -->
+  <section id="consolePanel" aria-label="Runtime console" aria-hidden="true">
+    <div id="consoleResizer" title="Drag to resize"></div>
+    <div id="consoleLog" role="log" aria-live="polite" aria-atomic="false"></div>
+    <div id="consoleToolbar">
+      <span class="status-dot" id="runDot" title="Runtime status"></span>
+      <span class="muted">Console</span>
+      <span class="spacer"></span>
+      <label><input type="checkbox" id="autoScroll" checked> Autoscroll</label>
+      <button id="copyBtn" title="Copy all logs">Copy</button>
+      <button id="clearBtn" title="Clear logs">Clear</button>
+      <button id="closeConsoleBtn" title="Close console">Close</button>
+    </div>
+  </section>
+
+  <script>
+    const sel = document.getElementById('game');
+    const btn = document.getElementById('loadBtn');
+    const statusEl = document.getElementById('status');
+
+    const panel = document.getElementById('consolePanel');
+    const resizer = document.getElementById('consoleResizer');
+    const logEl = document.getElementById('consoleLog');
+    const autoScrollEl = document.getElementById('autoScroll');
+    const copyBtn = document.getElementById('copyBtn');
+    const clearBtn = document.getElementById('clearBtn');
+    const closeConsoleBtn = document.getElementById('closeConsoleBtn');
+    const toggleConsoleBtn = document.getElementById('toggleConsoleBtn');
+    const runDot = document.getElementById('runDot');
+
+    // Always start collapsed
+    function setPanelOpen(open) {
+      panel.classList.toggle('open', open);
+      panel.setAttribute('aria-hidden', open ? 'false' : 'true');
+    }
+    function isOpen() { return panel.classList.contains('open'); }
+    setPanelOpen(false);
+
+    toggleConsoleBtn.addEventListener('click', () => setPanelOpen(!isOpen()));
+    closeConsoleBtn.addEventListener('click', () => setPanelOpen(false));
+    document.addEventListener('keydown', (e) => {
+      if (e.key === '`' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        e.preventDefault();
+        setPanelOpen(!isOpen());
+      }
+    });
+
+    // Resizer
+    let drag = null;
+    resizer.addEventListener('mousedown', (e) => {
+      drag = { startY: e.clientY, startH: panel.getBoundingClientRect().height };
+      document.body.style.userSelect = 'none';
+    });
+    window.addEventListener('mousemove', (e) => {
+      if (!drag) return;
+      const dy = drag.startY - e.clientY;
+      const newH = Math.min(window.innerHeight * 0.8, Math.max(120, drag.startH + dy));
+      panel.style.height = newH + 'px';
+    });
+    window.addEventListener('mouseup', () => {
+      drag = null;
+      document.body.style.userSelect = '';
+    });
+
+    function appendLine(text, cls) {
+      const div = document.createElement('div');
+      div.className = `log-line ${cls||''}`;
+      div.textContent = text;
+      logEl.appendChild(div);
+      if (autoScrollEl.checked) logEl.scrollTop = logEl.scrollHeight;
+    }
+    function logStdout(...args) { appendLine(args.join(' '), 'log-stdout'); }
+    function logStderr(...args) { appendLine(args.join(' '), 'log-stderr'); }
+    function logNote(...args)   { appendLine(args.join(' '), 'log-note'); }
+
+    clearBtn.addEventListener('click', () => { logEl.textContent = ''; });
+    copyBtn.addEventListener('click', async () => {
+      const text = Array.from(logEl.querySelectorAll('.log-line')).map(n => n.textContent).join('\n');
+      try { await navigator.clipboard.writeText(text); logNote('Copied console to clipboard'); }
+      catch { logStderr('Copy failed.'); }
+    });
+
+    function setRunStatus(kind) {
+      runDot.classList.remove('ok','err');
+      if (kind === 'ok') runDot.classList.add('ok');
+      if (kind === 'err') runDot.classList.add('err');
+    }
+
+    window.addEventListener('error', (e) => {
+      console.error('Uncaught error:', e.error || e.message);
+      logStderr('Uncaught error:', (e.error && e.error.stack) ? e.error.stack : (e.message || String(e)));
+      statusEl.textContent = 'Runtime error – see console';
+      setRunStatus('err');
+      setPanelOpen(true);
+    });
+    window.addEventListener('unhandledrejection', (e) => {
+      console.error('Unhandled promise rejection:', e.reason);
+      logStderr('Unhandled rejection:', e.reason && e.reason.stack ? e.reason.stack : String(e.reason));
+      statusEl.textContent = 'Runtime error – see console';
+      setRunStatus('err');
+      setPanelOpen(true);
+    });
+
+    (function wrapConsole(){
+      const origLog = console.log.bind(console);
+      const origErr = console.error.bind(console);
+      console.log = (...a) => { origLog(...a); logStdout(...a); };
+      console.error = (...a) => { origErr(...a); logStderr(...a); };
+    })();
+
+    function startGame(game) {
+      const bust = Date.now(); // cache-busting token
+
+      window.Module = {
+        canvas: document.getElementById('canvas'),
+        print: (...args) => { console.log('[stdout]', ...args); },
+        printErr: (...args) => { console.error('[stderr]', ...args); },
+        setStatus: (msg) => { statusEl.textContent = msg; },
+        onRuntimeInitialized() {
+          statusEl.textContent = `Running: ${game}`;
+          document.title = `My Arcade – ${game}`;
+          setRunStatus('ok');
+          logNote(`Runtime initialized for '${game}'`);
+        },
+        locateFile: (path) => `${path}?v=${bust}` // bust for wasm and other files
+      };
+
+      const script = document.createElement('script');
+      script.id = 'emu-loader';
+      script.src = `${game}.js?v=${bust}`;
+      script.onload = () => {
+        statusEl.textContent = `Loaded: ${game} (starting...)`;
+        console.log(`Loaded ${script.src}`);
+      };
+      script.onerror = (e) => {
+        console.error('Failed to load', script.src, e);
+        statusEl.textContent = `Failed to load ${game}.js (404?)`;
+        setRunStatus('err');
+        setPanelOpen(true);
+      };
+      document.body.appendChild(script);
+      statusEl.textContent = `Fetching ${game}.js...`;
+      setRunStatus(null);
+    }
+
+    (function initFromQuery() {
+      const url = new URL(window.location.href);
+      const g = url.searchParams.get('game');
+      if (!g) return;
+      for (const opt of sel.options) {
+        if (opt.value === g) { sel.value = g; break; }
+      }
+      startGame(g);
+    })();
+
+    btn.addEventListener('click', () => {
+      const game = sel.value;
+      if (!game) return;
+      const newUrl = new URL(window.location.href);
+      newUrl.searchParams.set('game', game);
+      window.location.href = newUrl.toString();
+    });
+  </script>
+</body>
+</html>
