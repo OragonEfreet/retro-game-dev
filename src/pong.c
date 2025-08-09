@@ -1,5 +1,6 @@
 #define BJ_AUTOMAIN_CALLBACKS
 #include <banjo/assert.h>
+#include <banjo/audio.h>
 #include <banjo/bitmap.h>
 #include <banjo/event.h>
 #include <banjo/linmath.h>
@@ -24,7 +25,7 @@
 
 #define BALL_INIT_SPEED   (282.842712f)
 #define BALL_SPEED_GAIN   (1.01f)
-#define BALL_CAP_SPEED    (BALL_INIT_SPEED * 2.0f)
+#define BALL_CAP_SPEED    (BALL_INIT_SPEED * 3.0f)
 
 #define LEFT_PADDLE_POSX   (PADDLE_MARGIN)
 #define RIGHT_PADDLE_POSX  (SCREEN_W - PADDLE_MARGIN - PADDLE_WIDTH)
@@ -47,6 +48,8 @@
 #define SCORE_RIGHT_X ((SCREEN_W / 4) * 3)
 #define SCORE_Y (CHAR_DISPLAY_SPACING + CHAR_DISPLAY_HEIGHT / 2)
 
+#define AUDIO_BUZZ_FREQUENCY 286.94
+
 static struct {
     struct {
         bj_vec2 position;
@@ -65,15 +68,35 @@ static struct {
     bj_bool game_over;
 } game = {0};
 
-bj_window* window         = 0;
-bj_bitmap* framebuffer    = 0;
-bj_bitmap* charset_buffer = 0;
-bj_stopwatch stopwatch    = {0};
+bj_audio_device* audio_device = 0;
+bj_bitmap* charset_buffer     = 0;
+bj_bitmap* framebuffer        = 0;
+bj_stopwatch stopwatch        = {0};
+bj_window* window             = 0;
+
+bj_audio_play_note_data audio = {.function = BJ_AUDIO_PLAY_SQUARE, .frequency = AUDIO_BUZZ_FREQUENCY};
+bj_stopwatch audio_stopwatch  = {0};
+double audio_length           = 0.5f;
 
 static float normalize_angle(float a) {
     a = fmodf(a + BJ_PI, 2.0f * BJ_PI);
     if (a < 0) a += 2.0f * BJ_PI;
     return a - BJ_PI;
+}
+
+static void play_sound(bj_bool high, double duration) {
+    bj_stopwatch_reset(&audio_stopwatch);
+    audio.frequency = high ? AUDIO_BUZZ_FREQUENCY * 2.0 : AUDIO_BUZZ_FREQUENCY;
+    audio_length = duration;
+    bj_audio_device_play(audio_device);
+}
+
+static void update_audio() {
+    bj_stopwatch_step(&audio_stopwatch);
+    double e = bj_stopwatch_elapsed(&audio_stopwatch);
+    if(e >= audio_length) {
+        bj_audio_device_stop(audio_device);
+    }
 }
 
 static void draw_score_and_lines(bj_bitmap* framebuffer) {
@@ -156,6 +179,7 @@ static void reset_game() {
     }
     
     game.running = BJ_FALSE;
+    play_sound(0, 1.0);
 }
 
 
@@ -238,7 +262,7 @@ static void check_game_over() {
     }
 }
 
-void game_logic(double dt) {
+static void game_logic(double dt) {
     if (game.game_over)
         return;
 
@@ -254,6 +278,7 @@ void game_logic(double dt) {
         if (ny < halfB || ny > SCREEN_H - halfB) {
             ny = bj_clamp(ny, halfB, SCREEN_H - halfB);
             game.ball.angle = normalize_angle(-game.ball.angle);
+            play_sound(1, 0.1);
         }
 
         for (int p = 0; p < 2; ++p) {
@@ -261,6 +286,7 @@ void game_logic(double dt) {
             if (bj_fabsf(nx - cx) <= halfB + PADDLE_WIDTH * 0.5f &&
                 bj_fabsf(ny - game.paddle[p].position_y) <= halfB + PADDLE_LENGTH * 0.5f)
             {
+                play_sound(1, 0.1);
                 float base  = (p == 0) ? 0.0f : BJ_PI;
                 float randn = (rand() / (float)RAND_MAX) * 2.0f - 1.0f;
                 float angle = base + randn * (BJ_PI * 0.25f);
@@ -318,6 +344,20 @@ int bj_app_begin(void** user_data, int argc, char* argv[]) {
 
     bj_set_key_callback(key_callback);
 
+    audio_device = bj_open_audio_device(&(bj_audio_properties){
+        .format      = BJ_AUDIO_FORMAT_F32,
+        .amplitude   = 16000,
+        .sample_rate = 44100,
+        .channels    = 2,
+    }, bj_audio_play_note, &audio, &p_error);
+
+    if (audio_device == 0) {
+        if (p_error) {
+            bj_err("cannot open audio: %s (%x)", p_error->message, p_error->code);
+        }
+        return bj_callback_exit_error;
+    }
+
     reset_game();
     return bj_callback_continue;
 }
@@ -327,6 +367,7 @@ int bj_app_iterate(void* user_data) {
 
     bj_dispatch_events();
     game_logic(bj_stopwatch_step_delay(&stopwatch));
+    update_audio();
 
     draw(framebuffer);
     bj_window_update_framebuffer(window);
@@ -339,6 +380,7 @@ int bj_app_iterate(void* user_data) {
 
 int bj_app_end(void* user_data, int status) {
     (void)user_data;
+    bj_close_audio_device(audio_device);
     bj_window_del(window);
     bj_bitmap_del(charset_buffer);
     bj_end(0);
