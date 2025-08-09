@@ -163,21 +163,23 @@ void key_callback(bj_window* p_window, const bj_key_event* e) {
     (void)p_window;
 
     static const struct {
-        bj_key up;
-        bj_key down;
+        bj_key up[2];
+        bj_key down[2];
     } keymap[2] = {
-        {.up = BJ_KEY_D, .down = BJ_KEY_F},
-        {.up = BJ_KEY_UP, .down = BJ_KEY_DOWN},
+        {.up = {BJ_KEY_Z, BJ_KEY_W}, .down = {BJ_KEY_S, BJ_KEY_S}},
+        {.up = {BJ_KEY_K, BJ_KEY_UP}, .down = {BJ_KEY_J, BJ_KEY_DOWN}},
     };
 
     for(size_t r = 0 ; r < 2 ; ++r) {
-        if(e->key == keymap[r].up) {
-            game.paddle[r].up = e->action == BJ_PRESS;
-            game.running = BJ_TRUE;
-        }
-        if(e->key == keymap[r].down) {
-            game.paddle[r].down = e->action == BJ_PRESS;
-            game.running = BJ_TRUE;
+        for(size_t k = 0 ; k < 2 ; ++k) {
+            if(e->key == keymap[r].up[k]) {
+                game.paddle[r].up = e->action == BJ_PRESS;
+                game.running = BJ_TRUE;
+            }
+            if(e->key == keymap[r].down[k]) {
+                game.paddle[r].down = e->action == BJ_PRESS;
+                game.running = BJ_TRUE;
+            }
         }
     }
 
