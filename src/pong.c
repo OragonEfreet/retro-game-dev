@@ -122,7 +122,8 @@ static void draw_score_and_lines(bj_bitmap* framebuffer) {
             };
             bj_bitmap_blit_stretched(
                 charset_buffer, &origin,
-                framebuffer, &dest
+                framebuffer, &dest,
+                BJ_BLIT_OP_COPY
             );
             char_x -= (CHAR_DISPLAY_SPACING + CHAR_DISPLAY_WIDTH);
         }
