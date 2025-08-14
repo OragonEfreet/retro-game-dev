@@ -42,7 +42,6 @@ source ./emsdk_env.sh
 
 cd -
 ```
-
 Run CMake with Emscripten enabled and build the project:
 
 ```sh

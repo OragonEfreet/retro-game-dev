@@ -34,7 +34,7 @@ include(FetchContent)
 FetchContent_Declare(
   banjo
   GIT_REPOSITORY https://github.com/OragonEfreet/banjo.git
-  GIT_TAG        main
+  GIT_TAG        drawing
 )
 FetchContent_MakeAvailable(banjo)
 
