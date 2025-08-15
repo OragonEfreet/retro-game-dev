@@ -18,8 +18,11 @@
 #define SCREEN_W 800
 #define SCREEN_H 600
 
-#define CANVAS_W 200
-#define CANVAS_H 150
+#define CANVAS_W 800
+#define CANVAS_H 600
+
+#define LANDER_VERTICES_LEN 24
+#define LANDER_EDGES_LEN 25
 
 typedef struct {
     bj_window*   window;
@@ -27,11 +30,9 @@ typedef struct {
     bj_bitmap*   framebuffer;
     bj_stopwatch stopwatch;
 
-    struct { float radius; float angle;} lander_coords[24];
-    size_t lander_edges[][2];
+    struct { float radius; float angle;} lander_coords[LANDER_VERTICES_LEN];
+    size_t lander_edges[LANDER_EDGES_LEN][2];
 } game_data;
-
-
 
 static void prepare_assets(game_data* data) {
 
@@ -44,39 +45,55 @@ static void prepare_assets(game_data* data) {
         {-10.f, 17.f,}, {10.f, 12.f,}, {10.f, 17.f,},  {13.f, 17.f,},
     };
 
-    for(size_t c = 0 ; c < 24 ; ++c) {
+    const size_t lander_edges[][2] = {
+        // Head
+        {0, 1,}, {1, 2,}, {2, 3,}, {3, 4,}, {4, 5,}, {5, 6,}, {6, 7,}, {7, 0,}, 
+        // Base
+        {8, 9,},   {9, 10,}, {10, 11,},  {11, 8,},  
+        // Neck
+        {3, 12,},  {4, 13,},
+        // Left leg
+        {8, 19,}, {19, 20,},  {9, 20,}, {9, 19,},  
+        // Right leg
+        {11, 23,}, {22, 23,}, {10, 22, }, {10, 23,}, 
+        // Thrusters
+        {14, 15,}, {15, 16,}, {16, 17,},
+    };
+
+    for(size_t c = 0 ; c < LANDER_VERTICES_LEN ; ++c) {
         const float x = lander_coords[c][0];
         const float y = lander_coords[c][1];
         data->lander_coords[c].radius = sqrt(x * x + y * y);
         data->lander_coords[c].angle  = atan2f(y, x);
     }
 
-    const size_t lander_edges[][2] = {
-        {0, 1,}, {1, 2,}, {2, 3,}, {3, 4,}, {4, 5,}, {5, 6,}, {6, 7,}, {7, 0,}, 
-        {8, 9,},   {9, 10,}, {10, 11,},  {11, 8,},  
-        {3, 12,},  {4, 13,},
-        {8, 19,}, {19, 20,},  {20, 18,}, {9, 19,},  
-        {11, 23,}, {22, 23,}, {21, 22, }, {10, 23,}, 
-        {14, 15,}, {15, 16,}, {16, 17,},
-    };
-    bj_memcpy(data->lander_edges, lander_edges, 25 * 2 * sizeof(size_t));
+    bj_memcpy(data->lander_edges, lander_edges, sizeof(lander_edges));
 }
 
-void draw(bj_bitmap* target, const game_data* data) {
+
+void draw(bj_bitmap* target, const game_data* data, double dt) {
+    // rotation state and speed (radians per second)
+    static float theta = 0.0f;
+    const float angular_speed = .3f; // tweak this to taste
+    theta += (float)dt * angular_speed;
+
+    // keep theta bounded to avoid float growth
+    const float TWO_PI = 6.28318530718f;
+    if (theta > TWO_PI || theta < -TWO_PI) theta = fmodf(theta, TWO_PI);
 
     const uint32_t color = bj_bitmap_pixel_value(target, 0x00, 0xFF, 0x00);
-
     bj_bitmap_clear(target);
 
     const int x = CANVAS_W / 2;
     const int y = CANVAS_H / 2;
-    const float size_em = 3.f;
+    const float size_em = 16.f;
 
-    for(size_t e = 12 ; e < 18 ; ++e) {
+    for (size_t e = 0; e < LANDER_EDGES_LEN; ++e) {
         const float r0 = data->lander_coords[data->lander_edges[e][0]].radius;
-        const float a0 = data->lander_coords[data->lander_edges[e][0]].angle;
+        const float a0 = data->lander_coords[data->lander_edges[e][0]].angle + theta;
         const float r1 = data->lander_coords[data->lander_edges[e][1]].radius;
-        const float a1 = data->lander_coords[data->lander_edges[e][1]].angle;
+        const float a1 = data->lander_coords[data->lander_edges[e][1]].angle + theta;
+
         bj_bitmap_draw_line(
             target,
             x + bj_cosf(a0) * r0 * size_em, y + bj_sinf(a0) * r0 * size_em,
@@ -84,10 +101,6 @@ void draw(bj_bitmap* target, const game_data* data) {
             color
         );
     }
-
-
-
-    
 }
 
 void key_callback(bj_window* p_window, const bj_key_event* e) {
@@ -114,7 +127,10 @@ int bj_app_begin(void** user_data, int argc, char* argv[]) {
 
     prepare_assets(data);
 
-    bj_set_key_callback(key_callback);
+
+    /* bj_set_key_callback(key_callback); */
+
+    bj_set_key_callback(bj_close_on_escape);
 
 
     return bj_callback_continue;
@@ -127,13 +143,10 @@ int bj_app_iterate(void* user_data) {
     /* game_logic(bj_stopwatch_step_delay(&stopwatch)); */
 
 
-    static int done = 0;
-    if(!done) {
-        draw(data->drawbuffer, data);
-        done = 1;
-        bj_bitmap_blit_stretched(data->drawbuffer, 0, data->framebuffer, 0, BJ_BLIT_OP_COPY);
-        bj_window_update_framebuffer(data->window);
-    }
+    draw(data->drawbuffer, data, bj_stopwatch_step_delay(&data->stopwatch));
+    bj_bitmap_blit_stretched(data->drawbuffer, 0, data->framebuffer, 0, BJ_BLIT_OP_COPY);
+    bj_window_update_framebuffer(data->window);
+
     bj_sleep(15);
 
     return bj_window_should_close(data->window) 
