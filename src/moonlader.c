@@ -18,8 +18,8 @@
 #define SCREEN_W 800
 #define SCREEN_H 600
 
-#define CANVAS_W 800
-#define CANVAS_H 600
+#define CANVAS_W 200
+#define CANVAS_H 150
 
 #define LANDER_VERTICES_LEN 24
 #define LANDER_EDGES_LEN 25
@@ -32,6 +32,13 @@ typedef struct {
 
     struct { float radius; float angle;} lander_coords[LANDER_VERTICES_LEN];
     size_t lander_edges[LANDER_EDGES_LEN][2];
+
+    struct {
+        bj_bool left;
+        bj_bool right;
+        bj_bool up;
+        bj_bool down;
+    } commands;
 } game_data;
 
 static void prepare_assets(game_data* data) {
@@ -86,7 +93,7 @@ void draw(bj_bitmap* target, const game_data* data, double dt) {
 
     const int x = CANVAS_W / 2;
     const int y = CANVAS_H / 2;
-    const float size_em = 16.f;
+    const float size_em = 3.f;
 
     for (size_t e = 0; e < LANDER_EDGES_LEN; ++e) {
         const float r0 = data->lander_coords[data->lander_edges[e][0]].radius;
@@ -130,7 +137,7 @@ int bj_app_begin(void** user_data, int argc, char* argv[]) {
 
     /* bj_set_key_callback(key_callback); */
 
-    bj_set_key_callback(bj_close_on_escape);
+    bj_set_key_callback(bj_close_on_escape, 0);
 
 
     return bj_callback_continue;

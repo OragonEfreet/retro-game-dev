@@ -185,8 +185,8 @@ static void reset_game() {
 }
 
 
-void key_callback(bj_window* p_window, const bj_key_event* e) {
-    (void)p_window;
+void key_callback(bj_window* p_window, const bj_key_event* e, void* data) {
+    (void)p_window; (void)data;
 
     static const struct {
         bj_key up[2];
@@ -344,7 +344,7 @@ int bj_app_begin(void** user_data, int argc, char* argv[]) {
 
     prepare_text(bj_bitmap_mode(framebuffer));
 
-    bj_set_key_callback(key_callback);
+    bj_set_key_callback(key_callback, 0);
 
     audio_device = bj_open_audio_device(&(bj_audio_properties){
         .format      = BJ_AUDIO_FORMAT_F32,
