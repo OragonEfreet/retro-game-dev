@@ -110,12 +110,6 @@ void draw(bj_bitmap* target, const game_data* data, double dt) {
     }
 }
 
-void key_callback(bj_window* p_window, const bj_key_event* e) {
-
-    if(e->key == BJ_KEY_ESCAPE && e->action == BJ_RELEASE) {
-        bj_window_set_should_close(p_window);
-    }
-}
 
 int bj_app_begin(void** user_data, int argc, char* argv[]) {
     (void)argc; (void)argv;
@@ -143,14 +137,35 @@ int bj_app_begin(void** user_data, int argc, char* argv[]) {
     return bj_callback_continue;
 }
 
+static void handle_events(game_data* data) {
+    (void)data;
+    bj_event e;
+
+    while(bj_poll_events(&e)) {
+        switch(e.type) {
+            case BJ_EVENT_KEY:
+            if(e.key.key == BJ_KEY_ESCAPE && e.key.action == BJ_RELEASE) {
+                bj_window_set_should_close(e.window);
+            }
+            default:
+                break;
+        }
+    }
+}
+
+static void game_logic(game_data* data, double dt) {
+    (void)data; (void)dt;
+}
+
 int bj_app_iterate(void* user_data) {
     game_data* data = (game_data*)user_data;
+    const double dt = bj_stopwatch_step_delay(&data->stopwatch);
 
-    bj_dispatch_events();
-    /* game_logic(bj_stopwatch_step_delay(&stopwatch)); */
+    handle_events(data);
+    game_logic(data, dt);
+    draw(data->drawbuffer, data, dt);
 
-
-    draw(data->drawbuffer, data, bj_stopwatch_step_delay(&data->stopwatch));
+    // Update framebuffer
     bj_bitmap_blit_stretched(data->drawbuffer, 0, data->framebuffer, 0, BJ_BLIT_OP_COPY);
     bj_window_update_framebuffer(data->window);
 
