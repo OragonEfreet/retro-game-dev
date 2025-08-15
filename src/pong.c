@@ -2,6 +2,7 @@
 #include <banjo/assert.h>
 #include <banjo/audio.h>
 #include <banjo/bitmap.h>
+#include <banjo/draw.h>
 #include <banjo/event.h>
 #include <banjo/linmath.h>
 #include <banjo/log.h>
@@ -137,7 +138,7 @@ static void draw_score_and_lines(bj_bitmap* framebuffer) {
             .w = MIDDLE_THICKNESS,
             .h = MIDDLE_DASH_LENGTH
         };
-        bj_bitmap_draw_rectangle(framebuffer, &dash, color);
+        bj_bitmap_draw_filled_rectangle(framebuffer, &dash, color);
     }
 }
 
@@ -153,7 +154,7 @@ void draw(bj_bitmap* framebuffer) {
     static bj_rect ball_rect = { .w = BALL_SIZE, .h = BALL_SIZE,};
     ball_rect.x = game.ball.position[0] - BALL_SIZE / 2;
     ball_rect.y = game.ball.position[1] - BALL_SIZE / 2;
-    bj_bitmap_draw_rectangle(framebuffer, &ball_rect, color);
+    bj_bitmap_draw_filled_rectangle(framebuffer, &ball_rect, color);
 
     static bj_rect paddle_rect[2] = {
         {.x = LEFT_PADDLE_POSX, .w = PADDLE_WIDTH, .h = PADDLE_LENGTH,},
@@ -161,7 +162,7 @@ void draw(bj_bitmap* framebuffer) {
     };
     for(size_t r = 0 ; r < 2 ; ++r) {
         paddle_rect[r].y = game.paddle[r].position_y - PADDLE_LENGTH / 2;
-        bj_bitmap_draw_rectangle(framebuffer, &paddle_rect[r], color);
+        bj_bitmap_draw_filled_rectangle(framebuffer, &paddle_rect[r], color);
     }
 }
 

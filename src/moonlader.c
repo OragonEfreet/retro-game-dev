@@ -2,7 +2,9 @@
 #include <banjo/assert.h>
 #include <banjo/audio.h>
 #include <banjo/bitmap.h>
+#include <banjo/draw.h>
 #include <banjo/event.h>
+#include <banjo/math.h>
 #include <banjo/linmath.h>
 #include <banjo/log.h>
 #include <banjo/main.h>
@@ -11,33 +13,92 @@
 #include <banjo/time.h>
 #include <banjo/window.h>
 
+#include <math.h>
+
 #define SCREEN_W 800
 #define SCREEN_H 600
 
-bj_bitmap* framebuffer        = 0;
-bj_stopwatch stopwatch        = {0};
-bj_window* window             = 0;
+#define CANVAS_W 200
+#define CANVAS_H 150
 
-void draw(bj_bitmap* framebuffer) {
-    bj_bitmap_clear(framebuffer);
+typedef struct {
+    bj_window*   window;
+    bj_bitmap*   drawbuffer;
+    bj_bitmap*   framebuffer;
+    bj_stopwatch stopwatch;
 
+    struct { float radius; float angle;} lander_coords[24];
+    size_t lander_edges[][2];
+} game_data;
+
+
+
+static void prepare_assets(game_data* data) {
+
+    const float lander_coords[][2] = {
+        {-3.f, -7.f,},  {-7.f, -3.f,}, {-7.f, 3.f,},   {-3.f, 7.f,},
+        {3.f, 7.f,},    {7.f, 3.f,},   {7.f, -3.f,},   {3.f, -7.f,},
+        {-8.f, 8.f,},   {-8.f, 13.f,}, {8.f, 13.f,},   {8.f, 8.f,},
+        {-3.f, 8.f,},   {3.f, 8.f,},   {-4.f, 13.f,},  {-7.f, 16.f,},
+        {7.f, 16.f,},   {4.f, 13.f,},  {-10.f, 13.f,}, {-13.f, 17.f,},
+        {-10.f, 17.f,}, {10.f, 12.f,}, {10.f, 17.f,},  {13.f, 17.f,},
+    };
+
+    for(size_t c = 0 ; c < 24 ; ++c) {
+        const float x = lander_coords[c][0];
+        const float y = lander_coords[c][1];
+        data->lander_coords[c].radius = sqrt(x * x + y * y);
+        data->lander_coords[c].angle  = atan2f(y, x);
+    }
+
+    const size_t lander_edges[][2] = {
+        {0, 1,}, {1, 2,}, {2, 3,}, {3, 4,}, {4, 5,}, {5, 6,}, {6, 7,}, {7, 0,}, 
+        {8, 9,},   {9, 10,}, {10, 11,},  {11, 8,},  
+        {3, 12,},  {4, 13,},
+        {8, 19,}, {19, 20,},  {20, 18,}, {9, 19,},  
+        {11, 23,}, {22, 23,}, {21, 22, }, {10, 23,}, 
+        {14, 15,}, {15, 16,}, {16, 17,},
+    };
+    bj_memcpy(data->lander_edges, lander_edges, 25 * 2 * sizeof(size_t));
+}
+
+void draw(bj_bitmap* target, const game_data* data) {
+
+    const uint32_t color = bj_bitmap_pixel_value(target, 0x00, 0xFF, 0x00);
+
+    bj_bitmap_clear(target);
+
+    const int x = CANVAS_W / 2;
+    const int y = CANVAS_H / 2;
+    const float size_em = 3.f;
+
+    for(size_t e = 12 ; e < 18 ; ++e) {
+        const float r0 = data->lander_coords[data->lander_edges[e][0]].radius;
+        const float a0 = data->lander_coords[data->lander_edges[e][0]].angle;
+        const float r1 = data->lander_coords[data->lander_edges[e][1]].radius;
+        const float a1 = data->lander_coords[data->lander_edges[e][1]].angle;
+        bj_bitmap_draw_line(
+            target,
+            x + bj_cosf(a0) * r0 * size_em, y + bj_sinf(a0) * r0 * size_em,
+            x + bj_cosf(a1) * r1 * size_em, y + bj_sinf(a1) * r1 * size_em,
+            color
+        );
+    }
+
+
+
+    
 }
 
 void key_callback(bj_window* p_window, const bj_key_event* e) {
-    (void)p_window;
 
     if(e->key == BJ_KEY_ESCAPE && e->action == BJ_RELEASE) {
-        bj_window_set_should_close(window);
+        bj_window_set_should_close(p_window);
     }
 }
 
-static void game_logic(double dt) {
-    (void)dt;
-
-}
-
 int bj_app_begin(void** user_data, int argc, char* argv[]) {
-    (void)user_data; (void)argc; (void)argv;
+    (void)argc; (void)argv;
 
     bj_error* p_error = 0;
     if(!bj_begin(&p_error)) {
@@ -45,32 +106,46 @@ int bj_app_begin(void** user_data, int argc, char* argv[]) {
         return bj_callback_exit_error;
     } 
 
-    window      = bj_window_new("Moonlander", 0,0, SCREEN_W, SCREEN_H, 0);
-    framebuffer = bj_window_get_framebuffer(window, 0);
+    game_data* data  = bj_malloc(sizeof(game_data));
+    data->window      = bj_window_new("Moonlander", 0,0, SCREEN_W, SCREEN_H, 0);
+    data->framebuffer = bj_window_get_framebuffer(data->window, 0);
+    data->drawbuffer  = bj_bitmap_new(CANVAS_W, CANVAS_H, bj_bitmap_mode(data->framebuffer), 0);
+    *user_data = data;
+
+    prepare_assets(data);
 
     bj_set_key_callback(key_callback);
+
 
     return bj_callback_continue;
 }
 
 int bj_app_iterate(void* user_data) {
-    (void)user_data;
+    game_data* data = (game_data*)user_data;
 
     bj_dispatch_events();
-    game_logic(bj_stopwatch_step_delay(&stopwatch));
+    /* game_logic(bj_stopwatch_step_delay(&stopwatch)); */
 
-    draw(framebuffer);
-    bj_window_update_framebuffer(window);
+
+    static int done = 0;
+    if(!done) {
+        draw(data->drawbuffer, data);
+        done = 1;
+        bj_bitmap_blit_stretched(data->drawbuffer, 0, data->framebuffer, 0, BJ_BLIT_OP_COPY);
+        bj_window_update_framebuffer(data->window);
+    }
     bj_sleep(15);
 
-    return bj_window_should_close(window) 
+    return bj_window_should_close(data->window) 
          ? bj_callback_exit_success 
          : bj_callback_continue;
 }
 
 int bj_app_end(void* user_data, int status) {
-    (void)user_data;
-    bj_window_del(window);
+    game_data* data = (game_data*)user_data;
+
+    bj_bitmap_del(data->drawbuffer);
+    bj_window_del(data->window);
     bj_end(0);
     return status;
 }
